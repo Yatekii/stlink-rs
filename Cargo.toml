@@ -1,0 +1,21 @@
+[package]
+name = "stlink-rs"
+version = "0.1.0"
+authors = ["Noah Huesser <yatekii@yatekii.ch>"]
+edition = "2018"
+
+[lib]
+name = "stlink"
+path = "src/lib/lib.rs"
+
+[[bin]]
+name = "cli"
+path = "src/cli/main.rs"
+
+[dependencies]
+libusb = "0.3"
+lazy_static = "*"
+ssmarshal = "1.0.0"
+dbg-probe = { path = "../dbg-probe" }
+
+[bin.dependencies]

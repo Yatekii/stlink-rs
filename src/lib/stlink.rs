@@ -388,7 +388,7 @@ impl<'a> STLink<'a> {
         self.write_mem(addr, data, commands::JTAG_WRITEMEM_8BIT, Self::MAXIMUM_TRANSFER_SIZE, apsel)
     }
     
-    fn read_dap_register(&mut self, port: u16, addr: u32) -> Result<u32, STLinkError> {
+    pub fn read_dap_register(&mut self, port: u16, addr: u32) -> Result<u32, STLinkError> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
             if (addr >> 16) == 0 {
                 let cmd = vec![
@@ -403,7 +403,7 @@ impl<'a> STLink<'a> {
                 self.device.write(cmd, &[], &mut buf, TIMEOUT)
                         .map_err(|e| STLinkError::USB(e))?;
                 Self::check_status(&buf)?;
-                Ok(deserialize(&buf[0..4]).unwrap().0)
+                Ok(deserialize(&buf[4..8]).unwrap().0)
             } else {
                 Err(STLinkError::RegisterAddressMustBe16Bit)
             }
@@ -412,7 +412,7 @@ impl<'a> STLink<'a> {
         }
     }
     
-    fn write_dap_register(&mut self, port: u16, addr: u32, value: u32) -> Result<(), STLinkError> {
+    pub fn write_dap_register(&mut self, port: u16, addr: u32, value: u32) -> Result<(), STLinkError> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
             if (addr >> 16) == 0 {
                 let cmd = vec![

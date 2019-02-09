@@ -1,4 +1,5 @@
 use stlink;
+use dbg_probe;
 
 use clap::{Arg, App, SubCommand};
 
@@ -64,4 +65,11 @@ fn show_info_of_device(n: u8) {
     let version = st_link.get_version();
     let vtg = st_link.get_target_voltage();
     println!("{:?} {:?}", version.ok(), vtg.ok());
+    let res = st_link.set_swd_frequency(stlink::constants::SwdFrequencyToDelayCount::Hz4600000);
+    println!("{:?}", res);
+    let res = st_link.target_reset();
+    println!("{:?}", res);
+    let res = st_link.enter_debug(dbg_probe::protocol::WireProtocol::Swd);
+    println!("{:?}", res);
+    st_link.close();
 }

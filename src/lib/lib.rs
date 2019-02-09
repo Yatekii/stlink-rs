@@ -1,5 +1,5 @@
 mod usb_interface;
-mod constants;
+pub mod constants;
 mod stlink;
 
 pub use crate::stlink::STLink;

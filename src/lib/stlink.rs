@@ -1,12 +1,3 @@
-// from . import STLinkException
-// from .constants import (Commands, Status, SWD_FREQ_MAP, JTAG_FREQ_MAP)
-// from ...core import exceptions
-// from ...coresight import dap
-// import logging
-// import struct
-// import six
-// from enum import Enum
-
 use ssmarshal::{
     deserialize,
     serialize
@@ -33,6 +24,7 @@ pub struct STLink<'a> {
     protocol: WireProtocol,
 }
 
+#[derive(Debug)]
 pub enum STLinkError {
     USB(libusb::Error),
     JTAGNotSupportedOnProbe,
@@ -76,18 +68,23 @@ impl<'a> STLink<'a> {
         }
     }
     
-    pub fn open(&mut self) {
-        self.device.open();
-        self.enter_idle();
-        self.get_version();
-        self.get_target_voltage();
+    /// Opens the ST-Link USB device and tries to identify the ST-Links version and it's target voltage.
+    pub fn open(&mut self) -> Result<(), STLinkError> {
+        self.device.open().or_else(|e| Err(STLinkError::USB(e)))?;
+        self.enter_idle()?;
+        self.get_version()?;
+        self.get_target_voltage().map(|v| ())
     }
 
-    fn close(&mut self) {
+    /// Closes the ST-Link USB device.
+    pub fn close(&mut self) {
         self.enter_idle();
         self.device.close();
     }
 
+    /// Reads the ST-Links version.
+    /// Returns a tuple (hardware version, firmware version).
+    /// This method stores the version data on the struct to make later use of it.
     pub fn get_version(&mut self) -> Result<(u8, u8), STLinkError> {
         const HW_VERSION_SHIFT: u8 = 12;
         const HW_VERSION_MASK: u8 = 0x0F;
@@ -112,7 +109,7 @@ impl<'a> STLink<'a> {
             }
         }
         
-        // For STLinkV3 we must use the extended get version command.
+        // For the STLinkV3 we must use the extended get version command.
         if self.hw_version >= 3 {
             // GET_VERSION_EXT response structure (byte offsets) {
             //  0: HW version
@@ -135,7 +132,7 @@ impl<'a> STLink<'a> {
             }
         }
             
-        // Check versions.
+        // Make sure everything is okay with the firmware we use.
         if self.jtag_version == 0 {
             return Err(STLinkError::JTAGNotSupportedOnProbe);
         }
@@ -146,24 +143,27 @@ impl<'a> STLink<'a> {
         Ok((self.hw_version, self.jtag_version))
     }
 
+    /// Reads the target voltage.
+    /// For the china fake variants this will always read a nonzero value!
     pub fn get_target_voltage(&mut self) -> Result<f32, STLinkError> {
         let mut buf = [0; 8];
         match self.device.write(vec![commands::GET_TARGET_VOLTAGE], &[], &mut buf, TIMEOUT) {
             Ok(_) => {
+                // The next two unwraps are safe!
                 let a0 = deserialize::<u32>(&buf[0..4]).unwrap().0 as f32;
                 let a1 = deserialize::<u32>(&buf[4..8]).unwrap().0 as f32;
                 if a0 != 0.0 {
                     Ok((2.0 * a1 * 1.2 / a0) as f32)
                 } else {
+                    // Should never happen
                     Err(STLinkError::VoltageDivisionByZero)
                 }
             },
-            Err(e) => {
-                    return Err(STLinkError::USB(e))
-                }
+            Err(e) => Err(STLinkError::USB(e))
         }
     }
 
+    /// Commands the ST-Link to enter idle mode.
     fn enter_idle(&mut self) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
         match self.device.write(vec![commands::GET_CURRENT_MODE], &[], &mut buf, TIMEOUT) {
@@ -185,26 +185,29 @@ impl<'a> STLink<'a> {
         }
     }
 
-    fn set_swd_frequency(&mut self, frequency: SwdFrequencyToDelayCount) -> Result<(), STLinkError> {
+    /// sets the SWD frequency.
+    pub fn set_swd_frequency(&mut self, frequency: SwdFrequencyToDelayCount) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
         self.device.write(vec![commands::JTAG_COMMAND, commands::SWD_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)
                    .map_err(|e| STLinkError::USB(e))?;
         Self::check_status(&buf)
     }
 
-    fn set_jtag_frequency(&mut self, frequency: JTagFrequencyToDivider) -> Result<(), STLinkError> {
+    /// Sets the JTAG frequency.
+    pub fn set_jtag_frequency(&mut self, frequency: JTagFrequencyToDivider) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
         self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)
                    .map_err(|e| STLinkError::USB(e))?;
         Self::check_status(&buf)
     }
 
-    fn enter_debug(&mut self, protocol: WireProtocol) -> Result<(), STLinkError> {
+    /// Enters debug mode.
+    pub fn enter_debug(&mut self, protocol: WireProtocol) -> Result<(), STLinkError> {
         self.enter_idle();
         
         let param = match protocol {
-            WireProtocol::Jtag => commands::JTAG_ENTER_SWD,
-            WireProtocol::Swd => commands::JTAG_ENTER_JTAG_NO_CORE_RESET
+            WireProtocol::Jtag => commands::JTAG_ENTER_JTAG_NO_CORE_RESET,
+            WireProtocol::Swd => commands::JTAG_ENTER_SWD
         };
 
         let mut buf = [0; 2];
@@ -234,7 +237,8 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf)
     }
 
-    fn target_reset(&mut self) -> Result<(), STLinkError> {
+    /// Resets the physically connected target.
+    pub fn target_reset(&mut self) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
         self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, commands::JTAG_DRIVE_NRST_PULSE], &[], &mut buf, TIMEOUT)
                    .map_err(|e| STLinkError::USB(e))?;

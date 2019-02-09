@@ -97,10 +97,18 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
 
     st_link.enter_debug(dbg_probe::protocol::WireProtocol::Swd).or_else(|e| Err(Error::STLinkError(e)))?;
     st_link.write_dap_register(0xFFFF, 0x2, 0x2).or_else(|e| Err(Error::STLinkError(e)))?;
-    let target = st_link.read_dap_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
-    println!("{}", target);
+    let target_info = st_link.read_dap_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
+    let target_info = parse_target_id(target_info);
+    println!("Target Information:");
+    println!("\tRevision = {}, Part Number = {}, Designer = {}", target_info.0, target_info.3, target_info.2);
     st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
     Ok(())
+}
+
+// revision | partno | designer | reserved
+// 4 bit    | 16 bit | 11 bit   | 1 bit
+fn parse_target_id(value: u32) -> (u8, u16, u16, u8) {
+    ((value >> 28) as u8, (value >> 12) as u16, ((value >> 1) & 0x07FF) as u16, (value & 0x01) as u8)
 }
 
 fn reset_target_of_device(n: u8, assert: Option<bool>) -> Result<(), Error> {

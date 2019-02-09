@@ -129,14 +129,15 @@ impl<'a> STLinkUSBDevice<'a> {
         }
 
         //self.flush_rx();
-         self.read(1000, Duration::from_millis(10));
+        self.read(1000, Duration::from_millis(10))?;
 
         Ok(())
     }
 
-    pub fn close(&mut self) {
-        self.device_handle.as_mut().map(|dh| dh.release_interface(0));
+    pub fn close(&mut self) -> Result<(), Error> {
+        self.device_handle.as_mut().map_or(Err(Error::NotFound), |dh| dh.release_interface(0))?;
         self.device_handle = None;
+        Ok(())
     }
 
     /// Flush the RX buffers by reading until a timeout occurs.

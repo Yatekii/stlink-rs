@@ -77,9 +77,9 @@ impl<'a> STLink<'a> {
     }
 
     /// Closes the ST-Link USB device.
-    pub fn close(&mut self) {
-        self.enter_idle();
-        self.device.close();
+    pub fn close(&mut self) -> Result<(), STLinkError> {
+        self.enter_idle()?;
+        self.device.close().or_else(|e| Err(STLinkError::USB(e)))
     }
 
     /// Reads the ST-Links version.
@@ -178,7 +178,9 @@ impl<'a> STLink<'a> {
                     self.device.write(vec![commands::SWIM_COMMAND, commands::SWIM_EXIT], &[], &mut[], TIMEOUT)
                                .map_err(|e| STLinkError::USB(e))
                 } else {
-                    Err(STLinkError::UnknownMode)
+                    Ok(())
+                    // TODO: Look this up
+                    // Err(STLinkError::UnknownMode)
                 }
             },
             Err(e) => Err(STLinkError::USB(e))
@@ -237,7 +239,7 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf)
     }
 
-    /// Resets the physically connected target.
+    /// Asserts the nRESET pin.
     pub fn target_reset(&mut self) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
         self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, commands::JTAG_DRIVE_NRST_PULSE], &[], &mut buf, TIMEOUT)
@@ -245,7 +247,9 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf)
     }
     
-    fn drive_nreset(&mut self, is_asserted: bool) -> Result<(), STLinkError> {
+    /// Drives the nRESET pin.
+    /// `is_asserted` tells wheter the reset should be asserted or deasserted.
+    pub fn drive_nreset(&mut self, is_asserted: bool) -> Result<(), STLinkError> {
         let state = if is_asserted { commands::JTAG_DRIVE_NRST_LOW } else { commands::JTAG_DRIVE_NRST_HIGH };
         let mut buf = [0; 2];
         self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, state], &[], &mut buf, TIMEOUT)

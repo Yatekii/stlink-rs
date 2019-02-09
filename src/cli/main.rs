@@ -73,7 +73,8 @@ fn list_connected_devices() {
 enum Error {
     USB(libusb::Error),
     DeviceNotFound,
-    STLinkError(stlink::STLinkError)
+    STLinkError(stlink::STLinkError),
+    Custom(&'static str)
 }
 
 fn show_info_of_device(n: u8) -> Result<(), Error> {
@@ -99,9 +100,28 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
     st_link.write_dap_register(0xFFFF, 0x2, 0x2).or_else(|e| Err(Error::STLinkError(e)))?;
     let target_info = st_link.read_dap_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
     let target_info = parse_target_id(target_info);
-    println!("Target Information:");
+    println!("Target Identification Register (TARGETID):");
     println!("\tRevision = {}, Part Number = {}, Designer = {}", target_info.0, target_info.3, target_info.2);
+
+    let target_info = st_link.read_dap_register(0xFFFF, 0x0).or_else(|e| Err(Error::STLinkError(e)))?;
+    let target_info = parse_target_id(target_info);
+    println!("Identification Code Register (IDCODE):");
+    println!(
+        "\tProtocol = {},\n\tPart Number = {},\n\tJEDEC Manufacturer ID = {:x}",
+        if target_info.0 == 0x4 {
+            "JTAG-DP"
+        } else if target_info.0 == 0x3 {
+            "SW-DP"
+        } else {
+            "Unknown Protocol"
+        },
+        target_info.1,
+        target_info.2
+    );
     st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
+    if target_info.3 != 1 || !(target_info.0 == 0x3 || target_info.0 == 0x4) || !(target_info.1 == 0xBA00 || target_info.1 == 0xBA02) {
+        return Err(Error::Custom("The IDCODE register has not-expected contents."));
+    }
     Ok(())
 }
 

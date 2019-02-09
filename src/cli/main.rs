@@ -86,20 +86,13 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
     }?;
     let usb_device = connected_devices.remove(n as usize);
     let mut st_link = stlink::STLink::new(usb_device);
-    println!("{:?}", st_link.open());
-    let version = st_link.get_version();
-    let vtg = st_link.get_target_voltage();
-    println!("{:?} {:?}", version.ok(), vtg.ok());
-    let res = st_link.set_swd_frequency(stlink::constants::SwdFrequencyToDelayCount::Hz4600000);
-    println!("{:?}", res);
-    let res = st_link.target_reset();
-    println!("{:?}", res);
-    let res = st_link.enter_debug(dbg_probe::protocol::WireProtocol::Swd);
-    println!("{:?}", res);
-    let res = st_link.drive_nreset(false);
-    println!("{:?}", res);
-    let res = st_link.close();
-    println!("{:?}", res);
+    st_link.open().or_else(|e| Err(Error::STLinkError(e)))?;
+    
+    let version = st_link.get_version().or_else(|e| Err(Error::STLinkError(e)))?;
+    let vtg = st_link.get_target_voltage().or_else(|e| Err(Error::STLinkError(e)))?;
+    println!("Hardware Version: {:?}", version.0);
+    println!("JTAG Version: {:?}", version.1);
+    println!("Target Voltage: {:?}", vtg);
     Ok(())
 }
 

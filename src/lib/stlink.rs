@@ -257,6 +257,10 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf)
     }
     
+    /// Validates the status given.
+    /// Returns an `Err(STLinkError::UnknownError)` if the status is not `Status::JtagOk`.
+    /// Returns Ok(()) otherwise.
+    /// This can be called on any status returned from the attached target.
     fn check_status(status: &[u8]) -> Result<(), STLinkError> {
         if status[0] != Status::JtagOk as u8 {
             Err(STLinkError::UnknownError)
@@ -388,53 +392,48 @@ impl<'a> STLink<'a> {
         self.write_mem(addr, data, commands::JTAG_WRITEMEM_8BIT, Self::MAXIMUM_TRANSFER_SIZE, apsel)
     }
     
+    /// Reads the DAP register on the specified port and address.
     pub fn read_dap_register(&mut self, port: u16, addr: u32) -> Result<u32, STLinkError> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
-            if (addr >> 16) == 0 {
-                let cmd = vec![
-                    commands::JTAG_COMMAND,
-                    commands::JTAG_READ_DAP_REG,
-                    (port & 0xFF) as u8,
-                    ((port >> 8) & 0xFF) as u8,
-                    (addr & 0xFF) as u8,
-                    ((addr >> 8) & 0xFF) as u8
-                ];
-                let mut buf = [0; 8];
-                self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                        .map_err(|e| STLinkError::USB(e))?;
-                Self::check_status(&buf)?;
-                Ok(deserialize(&buf[4..8]).unwrap().0)
-            } else {
-                Err(STLinkError::RegisterAddressMustBe16Bit)
-            }
+            let cmd = vec![
+                commands::JTAG_COMMAND,
+                commands::JTAG_READ_DAP_REG,
+                (port & 0xFF) as u8,
+                ((port >> 8) & 0xFF) as u8,
+                (addr & 0xFF) as u8,
+                ((addr >> 8) & 0xFF) as u8
+            ];
+            let mut buf = [0; 8];
+            self.device.write(cmd, &[], &mut buf, TIMEOUT)
+                    .map_err(|e| STLinkError::USB(e))?;
+            Self::check_status(&buf)?;
+            // Unwrap is ok!
+            Ok(deserialize(&buf[4..8]).unwrap().0)
         } else {
             Err(STLinkError::BlanksNotAllowedOnDPRegister)
         }
     }
     
-    pub fn write_dap_register(&mut self, port: u16, addr: u32, value: u32) -> Result<(), STLinkError> {
+    /// Writes a value to the DAP register on the specified port and address.
+    pub fn write_dap_register(&mut self, port: u16, addr: u16, value: u32) -> Result<(), STLinkError> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
-            if (addr >> 16) == 0 {
-                let cmd = vec![
-                    commands::JTAG_COMMAND,
-                    commands::JTAG_WRITE_DAP_REG,
-                    (port & 0xFF) as u8,
-                    ((port >> 8) & 0xFF) as u8,
-                    (addr & 0xFF) as u8,
-                    ((addr >> 8) & 0xFF) as u8,
-                    (value & 0xFF) as u8,
-                    ((value >> 8) & 0xFF) as u8,
-                    ((value >> 16) & 0xFF) as u8,
-                    ((value >> 24) & 0xFF) as u8,
-                ];
-                let mut buf = [0; 8];
-                self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                        .map_err(|e| STLinkError::USB(e))?;
-                Self::check_status(&buf)?;
-                Ok(())
-            } else {
-                Err(STLinkError::RegisterAddressMustBe16Bit)
-            }
+            let cmd = vec![
+                commands::JTAG_COMMAND,
+                commands::JTAG_WRITE_DAP_REG,
+                (port & 0xFF) as u8,
+                ((port >> 8) & 0xFF) as u8,
+                (addr & 0xFF) as u8,
+                ((addr >> 8) & 0xFF) as u8,
+                (value & 0xFF) as u8,
+                ((value >> 8) & 0xFF) as u8,
+                ((value >> 16) & 0xFF) as u8,
+                ((value >> 24) & 0xFF) as u8,
+            ];
+            let mut buf = [0; 8];
+            self.device.write(cmd, &[], &mut buf, TIMEOUT)
+                    .map_err(|e| STLinkError::USB(e))?;
+            Self::check_status(&buf)?;
+            Ok(())
         } else {
             Err(STLinkError::BlanksNotAllowedOnDPRegister)
         }

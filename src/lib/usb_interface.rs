@@ -9,6 +9,11 @@ use lazy_static::lazy_static;
 
 use std::collections::HashMap;
 
+use crate::stlink::{
+    STLinkError,
+    ToSTLinkErr,
+};
+
 /// The USB Command packet size.
 const CMD_LEN: usize = 16;
 
@@ -90,12 +95,13 @@ impl<'a> STLinkUSBDevice<'a> {
         })
     }
 
-    pub fn open(&mut self) -> Result<(), Error> {
-        self.device_handle = Some(self.device.open()?);
+    pub fn open(&mut self) -> Result<(), STLinkError> {
+        self.device_handle = Some(self.device.open().or_usb_err()?);
+        // The next statement will never fail.
         self.device_handle.as_mut().map(|ref mut dh| dh.claim_interface(0));
 
-        let config = self.device.active_config_descriptor()?;
-        let descriptor = self.device.device_descriptor()?;
+        let config = self.device.active_config_descriptor().or_usb_err()?;
+        let descriptor = self.device.device_descriptor().or_usb_err()?;
         let info = &USB_PID_EP_MAP[&descriptor.product_id()];
 
         let mut endpoint_out = None;
@@ -117,15 +123,15 @@ impl<'a> STLinkUSBDevice<'a> {
         }
         
         if endpoint_out.is_none() {
-            return Err(Error::NotFound);
+            return Err(STLinkError::EndpointNotFound);
         }
 
         if endpoint_in.is_none() {
-            return Err(Error::NotFound);
+            return Err(STLinkError::EndpointNotFound);
         }
 
         if endpoint_swv.is_none() {
-            return Err(Error::NotFound);
+            return Err(STLinkError::EndpointNotFound);
         }
 
         //self.flush_rx();
@@ -143,20 +149,20 @@ impl<'a> STLinkUSBDevice<'a> {
     /// Flush the RX buffers by reading until a timeout occurs.
     fn flush_rx(&mut self) {
         loop {
-            if let Err(Error::Timeout) = self.read(1000, Duration::from_millis(10)) {
+            if let Err(STLinkError::USB(Error::Timeout)) = self.read(1000, Duration::from_millis(10)) {
                 break;
             }
         }
     }
 
-    pub fn read(&mut self, size: u16, timeout: Duration) -> Result<Vec<u8>, Error> {
+    pub fn read(&mut self, size: u16, timeout: Duration) -> Result<Vec<u8>, STLinkError> {
         let mut buf = vec![0; size as usize];
         let ep_in = self.info.ep_in;
         self.device_handle.as_mut().map(|dh| dh.read_bulk(ep_in, buf.as_mut_slice(), timeout));
         Ok(buf)
     }
 
-    pub fn write(&mut self, mut cmd: Vec<u8>, write_data: &[u8], read_data: &mut[u8], timeout: Duration) -> Result<(), Error> {
+    pub fn write(&mut self, mut cmd: Vec<u8>, write_data: &[u8], read_data: &mut[u8], timeout: Duration) -> Result<(), STLinkError> {
         // Command phase.
         for _ in 0..(CMD_LEN - cmd.len()) {
             cmd.push(0);
@@ -165,36 +171,36 @@ impl<'a> STLinkUSBDevice<'a> {
         let ep_out = self.info.ep_out;
         let ep_in = self.info.ep_in;
 
-        let written_bytes = self.device_handle.as_mut().map(|dh| dh.write_bulk(ep_out, &cmd, timeout)).unwrap()?;
+        let written_bytes = self.device_handle.as_mut().map(|dh| dh.write_bulk(ep_out, &cmd, timeout)).unwrap().or_usb_err()?;
         
         if written_bytes != CMD_LEN {
-            return Err(Error::Io);
+            return Err(STLinkError::NotEnoughBytesRead);
         }
         
         // Optional data out phase.
         if write_data.len() > 0 {
-            let written_bytes = self.device_handle.as_mut().map(|dh| dh.write_bulk(ep_out, write_data, timeout)).unwrap()?;
+            let written_bytes = self.device_handle.as_mut().map(|dh| dh.write_bulk(ep_out, write_data, timeout)).unwrap().or_usb_err()?;
             if written_bytes != write_data.len() {
-                return Err(Error::Io);
+                return Err(STLinkError::NotEnoughBytesRead);
             }
         }
 
         // Optional data in phase.
         if read_data.len() > 0 {
-            let read_bytes = self.device_handle.as_mut().map(|dh| dh.read_bulk(ep_in, read_data, timeout)).unwrap()?;
+            let read_bytes = self.device_handle.as_mut().map(|dh| dh.read_bulk(ep_in, read_data, timeout)).unwrap().or_usb_err()?;
             if read_bytes != read_data.len() {
-                return Err(Error::Io);
+                return Err(crate::stlink::STLinkError::NotEnoughBytesRead);
             }
         }
         Ok(())
     }
 
-    pub fn read_swv(&mut self, size: usize, timeout: Duration) -> Result<Vec<u8>, Error> {
+    pub fn read_swv(&mut self, size: usize, timeout: Duration) -> Result<Vec<u8>, STLinkError> {
         let ep_swv = self.info.ep_swv;
         let mut buf = Vec::with_capacity(size as usize);
-        let read_bytes = self.device_handle.as_mut().map(|dh| dh.read_bulk(ep_swv, buf.as_mut_slice(), timeout)).unwrap()?;
+        let read_bytes = self.device_handle.as_mut().map(|dh| dh.read_bulk(ep_swv, buf.as_mut_slice(), timeout)).unwrap().or_usb_err()?;
         if read_bytes != size {
-            return Err(Error::Io);
+            return Err(crate::stlink::STLinkError::NotEnoughBytesRead);
         } else {
             Ok(buf)
         }

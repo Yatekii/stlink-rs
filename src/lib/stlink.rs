@@ -38,6 +38,21 @@ pub enum STLinkError {
     Access16BitNotSupported,
     BlanksNotAllowedOnDPRegister,
     RegisterAddressMustBe16Bit,
+    NotEnoughBytesRead,
+    EndpointNotFound,
+}
+
+pub trait ToSTLinkErr<T> {
+    fn or_usb_err(self) -> Result<T, STLinkError>;
+}
+
+impl<T> ToSTLinkErr<T> for libusb::Result<T> {
+    fn or_usb_err(self) -> Result<T, STLinkError> {
+        match self {
+            Ok(t) => Ok(t),
+            Err(e) => Err(STLinkError::USB(e)),
+        }
+    }
 }
 
 impl<'a> STLink<'a> {
@@ -70,7 +85,7 @@ impl<'a> STLink<'a> {
     
     /// Opens the ST-Link USB device and tries to identify the ST-Links version and it's target voltage.
     pub fn open(&mut self) -> Result<(), STLinkError> {
-        self.device.open().or_else(|e| Err(STLinkError::USB(e)))?;
+        self.device.open()?;
         self.enter_idle()?;
         self.get_version()?;
         self.get_target_voltage().map(|v| ())
@@ -105,7 +120,7 @@ impl<'a> STLink<'a> {
                 self.jtag_version = (version >> JTAG_VERSION_SHIFT) as u8 & JTAG_VERSION_MASK;
             },
             Err(e) => {
-                return Err(STLinkError::USB(e))
+                return Err(e)
             }
         }
         
@@ -127,7 +142,7 @@ impl<'a> STLink<'a> {
                     self.jtag_version = version;
                 },
                 Err(e) => {
-                    return Err(STLinkError::USB(e))
+                    return Err(e)
                 }
             }
         }
@@ -159,7 +174,7 @@ impl<'a> STLink<'a> {
                     Err(STLinkError::VoltageDivisionByZero)
                 }
             },
-            Err(e) => Err(STLinkError::USB(e))
+            Err(e) => Err(e)
         }
     }
 
@@ -170,36 +185,31 @@ impl<'a> STLink<'a> {
             Ok(_) => {
                 if buf[0] == commands::DEV_DFU_MODE {
                     self.device.write(vec![commands::DFU_COMMAND, commands::DFU_EXIT], &[], &mut[], TIMEOUT)
-                               .map_err(|e| STLinkError::USB(e))
                 } else if buf[0] == commands::DEV_JTAG_MODE {
                     self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_EXIT], &[], &mut[], TIMEOUT)
-                               .map_err(|e| STLinkError::USB(e))
                 } else if buf[0] == commands::DEV_SWIM_MODE {
                     self.device.write(vec![commands::SWIM_COMMAND, commands::SWIM_EXIT], &[], &mut[], TIMEOUT)
-                               .map_err(|e| STLinkError::USB(e))
                 } else {
                     Ok(())
                     // TODO: Look this up
                     // Err(STLinkError::UnknownMode)
                 }
             },
-            Err(e) => Err(STLinkError::USB(e))
+            Err(e) => Err(e)
         }
     }
 
     /// sets the SWD frequency.
     pub fn set_swd_frequency(&mut self, frequency: SwdFrequencyToDelayCount) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::SWD_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::SWD_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)?;
         Self::check_status(&buf)
     }
 
     /// Sets the JTAG frequency.
     pub fn set_jtag_frequency(&mut self, frequency: JTagFrequencyToDivider) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_SET_FREQ, frequency as u8], &[], &mut buf, TIMEOUT)?;
         Self::check_status(&buf)
     }
 
@@ -213,8 +223,7 @@ impl<'a> STLink<'a> {
         };
 
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_ENTER2, param, 0], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_ENTER2, param, 0], &[], &mut buf, TIMEOUT)?;
         self.protocol = protocol;
         return Self::check_status(&buf);
     }
@@ -224,8 +233,7 @@ impl<'a> STLink<'a> {
             return Err(STLinkError::JTagDoesNotSupportMultipleAP);
         }
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_INIT_AP, apsel, commands::JTAG_AP_NO_CORE], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_INIT_AP, apsel, commands::JTAG_AP_NO_CORE], &[], &mut buf, TIMEOUT)?;
         return Self::check_status(&buf)
     }
     
@@ -234,16 +242,14 @@ impl<'a> STLink<'a> {
             return Err(STLinkError::JTagDoesNotSupportMultipleAP);
         }
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_CLOSE_AP_DBG, apsel], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_CLOSE_AP_DBG, apsel], &[], &mut buf, TIMEOUT)?;
         return Self::check_status(&buf)
     }
 
     /// Asserts the nRESET pin.
     pub fn target_reset(&mut self) -> Result<(), STLinkError> {
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, commands::JTAG_DRIVE_NRST_PULSE], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, commands::JTAG_DRIVE_NRST_PULSE], &[], &mut buf, TIMEOUT)?;
         return Self::check_status(&buf)
     }
     
@@ -252,8 +258,7 @@ impl<'a> STLink<'a> {
     pub fn drive_nreset(&mut self, is_asserted: bool) -> Result<(), STLinkError> {
         let state = if is_asserted { commands::JTAG_DRIVE_NRST_LOW } else { commands::JTAG_DRIVE_NRST_HIGH };
         let mut buf = [0; 2];
-        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, state], &[], &mut buf, TIMEOUT)
-                   .map_err(|e| STLinkError::USB(e))?;
+        self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_DRIVE_NRST, state], &[], &mut buf, TIMEOUT)?;
         return Self::check_status(&buf)
     }
     
@@ -291,7 +296,7 @@ impl<'a> STLink<'a> {
                 apsel
             ];
             let mut buf = Vec::with_capacity(transfer_size as usize);
-            self.device.write(cmd, &[], buf.as_mut_slice(), TIMEOUT).map_err(|e| STLinkError::USB(e))?;
+            self.device.write(cmd, &[], buf.as_mut_slice(), TIMEOUT)?;
             result.extend(buf.into_iter());
 
             addr += transfer_size as u32;
@@ -299,8 +304,7 @@ impl<'a> STLink<'a> {
             
             // Check status of this read.
             let mut buf = [0; 12];
-            self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_GETLASTRWSTATUS2], &[], &mut buf, TIMEOUT)
-                       .map_err(|e| STLinkError::USB(e))?;
+            self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_GETLASTRWSTATUS2], &[], &mut buf, TIMEOUT)?;
             let status: u16 = deserialize(&buf[0..2]).unwrap().0;
             let fault_address = deserialize(&buf[4..8]).unwrap().0;
             if if status == Status::JtagUnknownError as u16 { true }
@@ -327,15 +331,14 @@ impl<'a> STLink<'a> {
                 (transfer_size >> 0) as u8, (transfer_size >> 8) as u8,
                 apsel
             ];
-            self.device.write(cmd, transfer_data, &mut [], TIMEOUT).map_err(|e| STLinkError::USB(e))?;
+            self.device.write(cmd, transfer_data, &mut [], TIMEOUT)?;
 
             addr += transfer_size as u32;
             data.drain(..transfer_size as usize);
             
             // Check status of this read.
             let mut buf = [0; 12];
-            self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_GETLASTRWSTATUS2], &[], &mut buf, TIMEOUT)
-                       .map_err(|e| STLinkError::USB(e))?;
+            self.device.write(vec![commands::JTAG_COMMAND, commands::JTAG_GETLASTRWSTATUS2], &[], &mut buf, TIMEOUT)?;
             let status: u16 = deserialize(&buf[0..2]).unwrap().0;
             let fault_address = deserialize(&buf[4..8]).unwrap().0;
             if if status == Status::JtagUnknownError as u16 { true }
@@ -404,8 +407,7 @@ impl<'a> STLink<'a> {
                 ((addr >> 8) & 0xFF) as u8
             ];
             let mut buf = [0; 8];
-            self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                       .map_err(|e| STLinkError::USB(e))?;
+            self.device.write(cmd, &[], &mut buf, TIMEOUT)?;
             Self::check_status(&buf)?;
             // Unwrap is ok!
             Ok(deserialize(&buf[4..8]).unwrap().0)
@@ -430,8 +432,7 @@ impl<'a> STLink<'a> {
                 ((value >> 24) & 0xFF) as u8,
             ];
             let mut buf = [0; 2];
-            self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                       .map_err(|e| STLinkError::USB(e))?;
+            self.device.write(cmd, &[], &mut buf, TIMEOUT)?;
             Self::check_status(&buf)?;
             Ok(())
         } else {

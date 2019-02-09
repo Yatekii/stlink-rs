@@ -405,7 +405,7 @@ impl<'a> STLink<'a> {
             ];
             let mut buf = [0; 8];
             self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                    .map_err(|e| STLinkError::USB(e))?;
+                       .map_err(|e| STLinkError::USB(e))?;
             Self::check_status(&buf)?;
             // Unwrap is ok!
             Ok(deserialize(&buf[4..8]).unwrap().0)
@@ -429,9 +429,9 @@ impl<'a> STLink<'a> {
                 ((value >> 16) & 0xFF) as u8,
                 ((value >> 24) & 0xFF) as u8,
             ];
-            let mut buf = [0; 8];
+            let mut buf = [0; 2];
             self.device.write(cmd, &[], &mut buf, TIMEOUT)
-                    .map_err(|e| STLinkError::USB(e))?;
+                       .map_err(|e| STLinkError::USB(e))?;
             Self::check_status(&buf)?;
             Ok(())
         } else {

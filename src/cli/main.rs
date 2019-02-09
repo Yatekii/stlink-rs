@@ -44,7 +44,8 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("info") {
         let number = matches.value_of("n").unwrap().parse::<u8>().unwrap();
-        let _ = show_info_of_device(number);
+        let result = show_info_of_device(number);
+        println!("{:?}", result);
     }
 
     if let Some(matches) = matches.subcommand_matches("reset") {
@@ -93,6 +94,12 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
     println!("Hardware Version: {:?}", version.0);
     println!("JTAG Version: {:?}", version.1);
     println!("Target Voltage: {:?}", vtg);
+
+    st_link.enter_debug(dbg_probe::protocol::WireProtocol::Swd).or_else(|e| Err(Error::STLinkError(e)))?;
+    st_link.write_dap_register(0xFFFF, 0x2, 0x2).or_else(|e| Err(Error::STLinkError(e)))?;
+    let target = st_link.read_dap_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
+    println!("{}", target);
+    st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
     Ok(())
 }
 
@@ -113,11 +120,11 @@ fn reset_target_of_device(n: u8, assert: Option<bool>) -> Result<(), Error> {
         println!("{} target reset.", if assert { "Asserting" } else { "Deasserting" });
         st_link.drive_nreset(assert).or_else(|e| Err(Error::STLinkError(e)))?;
         println!("Target reset has been {}.", if assert { "asserted" } else { "deasserted" });
-        st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
     } else {
         println!("Triggering target reset.");
         st_link.target_reset().or_else(|e| Err(Error::STLinkError(e)))?;
         println!("Target reset has been triggered.");
     }
+    st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
     Ok(())
 }

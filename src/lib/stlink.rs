@@ -282,8 +282,8 @@ impl<'a> STLink<'a> {
             let cmd = vec![
                 commands::JTAG_COMMAND,
                 memcmd,
-                addr as u8 | 0xFF, (addr >> 8) as u8 | 0xFF, (addr >> 16) as u8 | 0xFF, (addr >> 24) as u8 | 0xFF,
-                (transfer_size >> 0) as u8 | 0xFF, (transfer_size >> 8) as u8 | 0xFF,
+                addr as u8, (addr >> 8) as u8, (addr >> 16) as u8, (addr >> 24) as u8,
+                (transfer_size >> 0) as u8, (transfer_size >> 8) as u8,
                 apsel
             ];
             let mut buf = Vec::with_capacity(transfer_size as usize);
@@ -319,8 +319,8 @@ impl<'a> STLink<'a> {
             let cmd = vec![
                 commands::JTAG_COMMAND,
                 memcmd,
-                addr as u8 | 0xFF, (addr >> 8) as u8 | 0xFF, (addr >> 16) as u8 | 0xFF, (addr >> 24) as u8 | 0xFF,
-                (transfer_size >> 0) as u8 | 0xFF, (transfer_size >> 8) as u8 | 0xFF,
+                addr as u8, (addr >> 8) as u8, (addr >> 16) as u8, (addr >> 24) as u8,
+                (transfer_size >> 0) as u8, (transfer_size >> 8) as u8,
                 apsel
             ];
             self.device.write(cmd, transfer_data, &mut [], TIMEOUT).map_err(|e| STLinkError::USB(e))?;

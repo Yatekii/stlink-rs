@@ -219,7 +219,7 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf);
     }
     
-    fn open_ap(&mut self, apsel: AccessPort) -> Result<(), STLinkError> {
+    pub fn open_ap(&mut self, apsel: AccessPort) -> Result<(), STLinkError> {
         if self.jtag_version < Self::MIN_JTAG_VERSION_MULTI_AP {
             return Err(STLinkError::JTagDoesNotSupportMultipleAP);
         }
@@ -229,7 +229,7 @@ impl<'a> STLink<'a> {
         return Self::check_status(&buf)
     }
     
-    fn close_ap(&mut self, apsel: AccessPort) -> Result<(), STLinkError> {
+    pub fn close_ap(&mut self, apsel: AccessPort) -> Result<(), STLinkError> {
         if self.jtag_version < Self::MIN_JTAG_VERSION_MULTI_AP {
             return Err(STLinkError::JTagDoesNotSupportMultipleAP);
         }

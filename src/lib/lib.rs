@@ -1,6 +1,7 @@
 mod usb_interface;
 pub mod constants;
 mod stlink;
+pub mod debug_probe;
 
 pub use crate::stlink::{
     STLink,

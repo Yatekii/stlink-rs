@@ -408,7 +408,7 @@ impl<'a> STLink<'a> {
         }
     }
 
-    fn clear_sticky_error(&mut self) -> Result<(), STLinkError> {
+    pub fn clear_sticky_error(&mut self) -> Result<(), STLinkError> {
         // TODO: Implement this as soon as CoreSight is implemented
         // match self.protocol {
         //     WireProtocol::Jtag => self.write_dap_register(Self::DP_PORT, dap.DP_CTRL_STAT, dap.CTRLSTAT_STICKYERR),
@@ -417,7 +417,7 @@ impl<'a> STLink<'a> {
         Ok(())
     }
 
-    fn read_mem(
+    pub fn read_mem(
         &mut self,
         mut addr: u32,
         mut size: u32,
@@ -468,7 +468,7 @@ impl<'a> STLink<'a> {
             } else {
                 false
             } {
-                self.clear_sticky_error();
+                self.clear_sticky_error().ok();
                 return Err(STLinkError::TransferFault(
                     fault_address,
                     (transfer_size - (fault_address - addr)) as u16,
@@ -478,7 +478,7 @@ impl<'a> STLink<'a> {
         Ok(result)
     }
 
-    fn write_mem(
+    pub fn write_mem(
         &mut self,
         mut addr: u32,
         mut data: Vec<u8>,
@@ -527,7 +527,7 @@ impl<'a> STLink<'a> {
             } else {
                 false
             } {
-                self.clear_sticky_error();
+                self.clear_sticky_error().ok();
                 return Err(STLinkError::TransferFault(
                     fault_address,
                     (transfer_size - (fault_address - addr)) as u16,
@@ -537,7 +537,7 @@ impl<'a> STLink<'a> {
         Ok(())
     }
 
-    fn read_mem32(
+    pub fn read_mem32(
         &mut self,
         addr: u32,
         size: u32,
@@ -555,7 +555,7 @@ impl<'a> STLink<'a> {
         Err(STLinkError::DataAlignmentError)
     }
 
-    fn write_mem32(
+    pub fn write_mem32(
         &mut self,
         addr: u32,
         data: Vec<u8>,
@@ -573,7 +573,7 @@ impl<'a> STLink<'a> {
         Err(STLinkError::DataAlignmentError)
     }
 
-    fn read_mem16(
+    pub fn read_mem16(
         &mut self,
         addr: u32,
         size: u32,
@@ -594,7 +594,7 @@ impl<'a> STLink<'a> {
         Err(STLinkError::DataAlignmentError)
     }
 
-    fn write_mem16(
+    pub fn write_mem16(
         &mut self,
         addr: u32,
         data: Vec<u8>,
@@ -615,7 +615,7 @@ impl<'a> STLink<'a> {
         Err(STLinkError::DataAlignmentError)
     }
 
-    fn read_mem8(
+    pub fn read_mem8(
         &mut self,
         addr: u32,
         size: u32,
@@ -630,7 +630,7 @@ impl<'a> STLink<'a> {
         )
     }
 
-    fn write_mem8(
+    pub fn write_mem8(
         &mut self,
         addr: u32,
         data: Vec<u8>,

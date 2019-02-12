@@ -16,10 +16,4 @@ pub trait DebugProbe {
     fn detach(&mut self) -> Result<(), Self::Error>;
 
     fn target_reset(&mut self) -> Result<(), Self::Error>;
-
-    /// Reads the DAP register on the specified port and address.
-    fn read_dap_register(&mut self, port: u16, addr: u32) -> Result<u32, Self::Error>;
-
-    /// Writes a value to the DAP register on the specified port and address.
-    fn write_dap_register(&mut self, port: u16, addr: u16, value: u32) -> Result<(), Self::Error>;
 }

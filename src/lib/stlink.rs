@@ -1,6 +1,7 @@
+use crate::dap_access::DAPAccess;
 use crate::debug_probe::DebugProbe;
 
-use ssmarshal::{deserialize, serialize};
+use ssmarshal::deserialize;
 
 use crate::constants::{commands, JTagFrequencyToDivider, Status, SwdFrequencyToDelayCount};
 use crate::usb_interface::{STLinkUSBDevice, TIMEOUT};
@@ -54,7 +55,7 @@ impl<'a> DebugProbe for STLink<'a> {
         self.device.open()?;
         self.enter_idle()?;
         self.get_version()?;
-        self.get_target_voltage().map(|v| ())
+        self.get_target_voltage().map(|_| ())
     }
 
     /// Closes the ST-Link USB device.
@@ -128,7 +129,7 @@ impl<'a> DebugProbe for STLink<'a> {
 
     /// Enters debug mode.
     fn attach(&mut self, protocol: WireProtocol) -> Result<(), Self::Error> {
-        self.enter_idle();
+        self.enter_idle()?;
 
         let param = match protocol {
             WireProtocol::Jtag => commands::JTAG_ENTER_JTAG_NO_CORE_RESET,
@@ -166,9 +167,13 @@ impl<'a> DebugProbe for STLink<'a> {
         )?;
         return Self::check_status(&buf);
     }
+}
+
+impl<'a> DAPAccess for STLink<'a> {
+    type Error = STLinkError;
 
     /// Reads the DAP register on the specified port and address.
-    fn read_dap_register(&mut self, port: u16, addr: u32) -> Result<u32, Self::Error> {
+    fn read_register(&mut self, port: u16, addr: u32) -> Result<u32, Self::Error> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
             let cmd = vec![
                 commands::JTAG_COMMAND,
@@ -189,7 +194,7 @@ impl<'a> DebugProbe for STLink<'a> {
     }
 
     /// Writes a value to the DAP register on the specified port and address.
-    fn write_dap_register(&mut self, port: u16, addr: u16, value: u32) -> Result<(), Self::Error> {
+    fn write_register(&mut self, port: u16, addr: u16, value: u32) -> Result<(), Self::Error> {
         if (addr & 0xf0) == 0 || port != Self::DP_PORT {
             let cmd = vec![
                 commands::JTAG_COMMAND,

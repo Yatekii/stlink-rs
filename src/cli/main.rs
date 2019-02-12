@@ -1,7 +1,7 @@
 use stlink;
 use dbg_probe;
-use std::process;
 use stlink::debug_probe::DebugProbe;
+use stlink::dap_access::DAPAccess;
 
 use clap::{Arg, App, SubCommand};
 
@@ -98,14 +98,14 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
     println!("Target Voltage: {:?}", vtg);
 
     st_link.attach(dbg_probe::protocol::WireProtocol::Swd).or_else(|e| Err(Error::STLinkError(e)))?;
-    st_link.write_dap_register(0xFFFF, 0x2, 0x2).or_else(|e| Err(Error::STLinkError(e)))?;
+    st_link.write_register(0xFFFF, 0x2, 0x2).or_else(|e| Err(Error::STLinkError(e)))?;
 
-    let target_info = st_link.read_dap_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
+    let target_info = st_link.read_register(0xFFFF, 0x4).or_else(|e| Err(Error::STLinkError(e)))?;
     let target_info = parse_target_id(target_info);
     println!("Target Identification Register (TARGETID):");
     println!("\tRevision = {}, Part Number = {}, Designer = {}", target_info.0, target_info.3, target_info.2);
 
-    let target_info = st_link.read_dap_register(0xFFFF, 0x0).or_else(|e| Err(Error::STLinkError(e)))?;
+    let target_info = st_link.read_register(0xFFFF, 0x0).or_else(|e| Err(Error::STLinkError(e)))?;
     let target_info = parse_target_id(target_info);
     println!("Identification Code Register (IDCODE):");
     println!(

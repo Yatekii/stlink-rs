@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use coresight_rs::dap_access::DAPAccess;
+use coresight_rs::access_port::AccessPortError;
 use coresight_rs::memory_interface::MemoryInterface;
 use probe_rs::debug_probe::DebugProbe;
 
@@ -84,6 +85,7 @@ enum Error {
     USB(libusb::Error),
     DeviceNotFound,
     STLinkError(stlink::STLinkError),
+    AccessPortError(AccessPortError),
     Custom(&'static str),
 }
 
@@ -211,19 +213,16 @@ fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
 
     let mut mem = MemoryInterface::new(0x0);
 
-    let mut data = vec![];
+    let mut data = vec![0; words as usize];
 
     let instant = Instant::now();
 
-    for offset in 0..words {
-        let addr = loc + 4 * offset;
-        data.push((addr, mem.read_u32(&mut st_link, addr).ok().unwrap()));
-    }
+    mem.read_block_u32(&mut st_link, loc, &mut data.as_mut_slice()).or_else(|e| Err(Error::AccessPortError(e)))?;
 
     let elapsed = instant.elapsed();
 
     for word in 0..words {
-        println!("Addr 0x{:08x?}: 0x{:08x}", data[word as usize].0, data[word as usize].1);
+        println!("Addr 0x{:08x?}: 0x{:08x}", loc + 4 * word, data[word as usize]);
     }
 
     println!("Read {:?} words in {:?}", words, elapsed);

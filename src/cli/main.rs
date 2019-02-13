@@ -3,6 +3,10 @@ use stlink::debug_probe::DebugProbe;
 
 use structopt::StructOpt;
 
+fn parse_hex(src: &str) -> Result<u32, std::num::ParseIntError> {
+    u32::from_str_radix(src, 16)
+}
+
 #[derive(StructOpt)]
 #[structopt(
     name = "ST-Link CLI",
@@ -27,6 +31,17 @@ enum CLI {
         /// Whether the reset pin should be asserted or deasserted. If left open, just pulse it
         assert: Option<bool>,
     },
+    /// Dump memory from attached target
+    #[structopt(name = "dump")]
+    Dump {
+        /// The number associated with the ST-Link to use
+        n: u8,
+        /// The address of the memory to dump from the target (in hexadecimal without 0x prefix)
+        #[structopt(parse(try_from_str = "parse_hex"))]
+        loc: u32,
+        /// The amount of memory (in words) to dump
+        words: u32,
+    },
 }
 
 fn main() {
@@ -36,6 +51,7 @@ fn main() {
         CLI::List {} => list_connected_devices(),
         CLI::Info { n } => show_info_of_device(n).unwrap(),
         CLI::Reset { n, assert } => reset_target_of_device(n, assert).unwrap(),
+        CLI::Dump { n, loc, words } => dump_memory(n, loc, words).unwrap(),
     }
 }
 
@@ -152,6 +168,53 @@ fn parse_target_id(value: u32) -> (u8, u16, u16, u8) {
         ((value >> 1) & 0x07FF) as u16,
         (value & 0x01) as u8,
     )
+}
+
+fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
+    const CSW_SIZE32: u32 = 0x00000002;
+    const CSW_SADDRINC: u32 = 0x00000010;
+    const CSW_DBGSTAT: u32 = 0x00000040;
+    const CSW_HPROT: u32 = 0x02000000;
+    const CSW_MSTRDBG: u32 = 0x20000000;
+    const CSW_RESERVED: u32 = 0x01000000;
+
+    const CSW_VALUE: u32 = (CSW_RESERVED | CSW_MSTRDBG | CSW_HPROT | CSW_DBGSTAT | CSW_SADDRINC);
+
+    let mut context = libusb::Context::new().or_else(|e| {
+        println!("Failed to open an USB context.");
+        Err(Error::USB(e))
+    })?;
+    let mut connected_devices = stlink::get_all_plugged_devices(&mut context).or_else(|e| {
+        println!("Failed to fetch plugged USB devices.");
+        Err(Error::USB(e))
+    })?;
+    if connected_devices.len() <= n as usize {
+        println!("The device with the given number was not found.");
+        Err(Error::DeviceNotFound)
+    } else {
+        Ok(())
+    }?;
+    let usb_device = connected_devices.remove(n as usize);
+    let mut st_link = stlink::STLink::new(usb_device);
+    st_link.open().or_else(|e| Err(Error::STLinkError(e)))?;
+
+    st_link
+        .attach(dbg_probe::protocol::WireProtocol::Swd)
+        .or_else(|e| Err(Error::STLinkError(e)))?;
+
+    st_link
+        .write_register(0x0, 0x0, CSW_VALUE | CSW_SIZE32)
+        .ok();
+    for offset in 0..words {
+        let addr = loc + 4 * offset;
+        st_link.write_register(0x0, 0x4, addr).ok();
+        let res = st_link.read_register(0x0, 0xC);
+        println!("Addr 0x{:08x?}: 0x{:08x}", addr, res.unwrap());
+    }
+
+    st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
+
+    Ok(())
 }
 
 fn reset_target_of_device(n: u8, assert: Option<bool>) -> Result<(), Error> {

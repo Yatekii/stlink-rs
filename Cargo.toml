@@ -13,8 +13,8 @@ name = "cli"
 path = "src/cli/main.rs"
 
 [dependencies]
-libusb = "0.3"
-lazy_static = "*"
+libusb = "0.3.0"
+lazy_static = "1.2.0"
 ssmarshal = "1.0.0"
 dbg-probe = { path = "../dbg-probe" }
-clap = "*"
+structopt = "0.2.14"

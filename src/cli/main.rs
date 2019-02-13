@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use coresight_rs::dap_access::DAPAccess;
+use coresight_rs::memory_interface::MemoryInterface;
 use probe_rs::debug_probe::DebugProbe;
 
 use structopt::StructOpt;
@@ -208,15 +209,15 @@ fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
         .write_register(0x0, 0x0, CSW_VALUE | CSW_SIZE32)
         .ok();
 
+    let mut mem = MemoryInterface::new(0x0);
+
     let mut data = vec![];
 
     let instant = Instant::now();
 
     for offset in 0..words {
         let addr = loc + 4 * offset;
-        st_link.write_register(0x0, 0x4, addr).ok();
-        let res = st_link.read_register(0x0, 0xC);
-        data.push((addr, res.unwrap()));
+        data.push((addr, mem.read_u32(&mut st_link, addr).ok().unwrap()));
     }
 
     let elapsed = instant.elapsed();

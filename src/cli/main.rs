@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use stlink::dap_access::DAPAccess;
-use stlink::debug_probe::DebugProbe;
+use coresight_rs::dap_access::DAPAccess;
+use probe_rs::debug_probe::DebugProbe;
 
 use structopt::StructOpt;
 
@@ -116,7 +116,7 @@ fn show_info_of_device(n: u8) -> Result<(), Error> {
     println!("Target Voltage: {:?}", vtg);
 
     st_link
-        .attach(dbg_probe::protocol::WireProtocol::Swd)
+        .attach(probe_rs::protocol::WireProtocol::Swd)
         .or_else(|e| Err(Error::STLinkError(e)))?;
     st_link
         .write_register(0xFFFF, 0x2, 0x2)
@@ -201,7 +201,7 @@ fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
     st_link.open().or_else(|e| Err(Error::STLinkError(e)))?;
 
     st_link
-        .attach(dbg_probe::protocol::WireProtocol::Swd)
+        .attach(probe_rs::protocol::WireProtocol::Swd)
         .or_else(|e| Err(Error::STLinkError(e)))?;
 
     st_link

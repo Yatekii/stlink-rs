@@ -16,5 +16,6 @@ path = "src/cli/main.rs"
 libusb = "0.3.0"
 lazy_static = "1.2.0"
 ssmarshal = "1.0.0"
-dbg-probe = { path = "../dbg-probe" }
+probe-rs = { path = "../probe-rs" }
+coresight-rs = { path = "../coresight-rs" }
 structopt = "0.2.14"

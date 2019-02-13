@@ -1,11 +1,11 @@
-use crate::dap_access::DAPAccess;
-use crate::debug_probe::DebugProbe;
-
 use ssmarshal::deserialize;
+
+use coresight_rs::dap_access::DAPAccess;
+use probe_rs::debug_probe::DebugProbe;
+use probe_rs::protocol::WireProtocol;
 
 use crate::constants::{commands, JTagFrequencyToDivider, Status, SwdFrequencyToDelayCount};
 use crate::usb_interface::{STLinkUSBDevice, TIMEOUT};
-use dbg_probe::protocol::WireProtocol;
 
 type AccessPort = u8;
 

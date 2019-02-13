@@ -210,7 +210,7 @@ fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
 
     let mut data = vec![];
 
-    let i = Instant::now();
+    let instant = Instant::now();
 
     for offset in 0..words {
         let addr = loc + 4 * offset;
@@ -219,11 +219,13 @@ fn dump_memory(n: u8, loc: u32, words: u32) -> Result<(), Error> {
         data.push((addr, res.unwrap()));
     }
 
+    let elapsed = instant.elapsed();
+
     for word in 0..words {
         println!("Addr 0x{:08x?}: 0x{:08x}", data[word as usize].0, data[word as usize].1);
     }
 
-    println!("Read {:?} words in {:?}", words, i.elapsed());
+    println!("Read {:?} words in {:?}", words, elapsed);
 
     st_link.close().or_else(|e| Err(Error::STLinkError(e)))?;
 
